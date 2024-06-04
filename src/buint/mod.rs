@@ -28,6 +28,7 @@ macro_rules! mod_impl {
         #[doc = doc::arithmetic_doc!($BUint)]
 
         #[derive(Clone, Copy, Hash, PartialEq, Eq)]
+        #[cfg_attr(feature = "borsh", derive(borsh::BorshSerialize, borsh::BorshDeserialize))]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
         #[cfg_attr(feature = "valuable", derive(valuable::Valuable))]
