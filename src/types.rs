@@ -1,6 +1,6 @@
 //! Type aliases for big signed and unsigned integers. Each is an alias for either a [`BUint`] or a [`BInt`].
 
-use crate::{BInt, BUint};
+use crate::{errors::TryFromIntError, BInt, BTryFrom, BUint};
 
 macro_rules! int_type_doc {
     ($bits: literal, $sign: literal) => {
@@ -34,12 +34,35 @@ macro_rules! call_types_macro {
     };
 }
 
+macro_rules! big_conversion {
+    (
+        $from:tt => $to:tt
+    ) => {
+        impl From<$from> for $to {
+            fn from(value: $from) -> Self {
+                let from_bytes: [u8; <$from>::BYTES as usize] = value.to_le_bytes();
+                let mut to_bytes = [0_u8; <$to>::BYTES as usize];
+                to_bytes[..<$from>::BYTES as usize].copy_from_slice(&from_bytes);
+                <$to>::from_le_bytes(to_bytes)
+            }
+        }
+
+        impl TryFrom<$to> for $from {
+            type Error = TryFromIntError;
+            fn try_from(value: $to) -> Result<Self, Self::Error> {
+                BTryFrom::<$to>::try_from(value)
+            }
+        }
+    };
+}
+
+big_conversion!(U256 => U512);
+
 call_types_macro!(int_types);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     macro_rules! assert_int_bits {
         { $($bits: literal $u: ident $i: ident; ) *} => {
             $(
@@ -52,5 +75,27 @@ mod tests {
     #[test]
     fn test_int_bits() {
         call_types_macro!(assert_int_bits);
+    }
+
+    #[test]
+    fn test_from_to() {
+        let u256 = U256::from(42_u64);
+        let u512: U512 = u256.into();
+        assert_eq!(u512, U512::from(42_u64));
+
+        let u256: U256 = TryFrom::<U512>::try_from(u512).unwrap();
+        assert_eq!(u256, U256::from(42_u64));
+
+        let u256: Result<U256, TryFromIntError> = TryFrom::<U512>::try_from(U512::MAX);
+        assert!(u256.is_err());
+
+        let u256 = U256::MAX;
+        let mut u512: U512 = u256.into();
+        let _: U256 = TryFrom::<U512>::try_from(u512).unwrap();
+
+        u512 += U512::ONE;
+
+        let u256: Result<U256, TryFromIntError> = TryFrom::<U512>::try_from(U512::MAX);
+        assert!(u256.is_err());
     }
 }
