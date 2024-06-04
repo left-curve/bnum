@@ -38,12 +38,39 @@ macro_rules! big_conversion {
     (
         $from:tt => $to:tt
     ) => {
-        impl From<$from> for $to {
+        impl From<$from> for U512 {
             fn from(value: $from) -> Self {
-                let from_bytes: [u8; <$from>::BYTES as usize] = value.to_le_bytes();
-                let mut to_bytes = [0_u8; <$to>::BYTES as usize];
-                to_bytes[..<$from>::BYTES as usize].copy_from_slice(&from_bytes);
-                <$to>::from_le_bytes(to_bytes)
+                const FROM_BYTES_LEN: usize = <$from>::BYTES as usize;
+                const TO_BYTES_LEN: usize = <$to>::BYTES as usize;
+
+                // --- value.to_le_bytes() ---
+
+                let words = value.digits();
+                let mut bytes: [[u8; 8]; FROM_BYTES_LEN / 8] = [[0u8; 8]; FROM_BYTES_LEN / 8];
+                for i in 0..FROM_BYTES_LEN / 8 {
+                    bytes[i] = words[i].to_le_bytes();
+                }
+
+                let from_bytes: [u8; FROM_BYTES_LEN] = unsafe { core::mem::transmute(bytes) };
+                let mut to_bytes = [0_u8; TO_BYTES_LEN];
+                to_bytes[..FROM_BYTES_LEN].copy_from_slice(&from_bytes);
+
+                // --- Value from le bytes ---
+
+                let mut bytes = [0u64; TO_BYTES_LEN / 8];
+                for i in 0..TO_BYTES_LEN / 8 {
+                    bytes[i] = u64::from_le_bytes([
+                        to_bytes[i * 8],
+                        to_bytes[i * 8 + 1],
+                        to_bytes[i * 8 + 2],
+                        to_bytes[i * 8 + 3],
+                        to_bytes[i * 8 + 4],
+                        to_bytes[i * 8 + 5],
+                        to_bytes[i * 8 + 6],
+                        to_bytes[i * 8 + 7],
+                    ])
+                }
+                Self::from_digits(bytes)
             }
         }
 
